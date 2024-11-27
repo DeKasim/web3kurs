@@ -1,7 +1,15 @@
 from django.contrib.auth.models import User
+from django.core.mail import send_mail
+from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
+from django.dispatch import receiver
+
 from django.db import models
 from simple_history.models import HistoricalRecords
+
+
+ban_words = ['проверкабана', 'банворд']
+
 
 class Topic(models.Model):
     name = models.CharField(
@@ -19,6 +27,7 @@ class Topic(models.Model):
     class Meta:
         verbose_name = 'Тема'
         verbose_name_plural = 'Темы'
+
 
 class Question(models.Model):
     title = models.CharField(
@@ -43,6 +52,7 @@ class Question(models.Model):
         verbose_name = 'Вопрос'
         verbose_name_plural = 'Вопросы'
 
+
 class Answer(models.Model):
     question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='answers', verbose_name='Вопрос')
     author = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='Автор')
@@ -61,6 +71,8 @@ class Answer(models.Model):
         verbose_name = 'Ответ'
         verbose_name_plural = 'Ответы'
 
+
+
 class Comment(models.Model):
     answer = models.ForeignKey(Answer, on_delete=models.CASCADE, verbose_name='Ответ')
     author = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='Автор')
@@ -76,6 +88,7 @@ class Comment(models.Model):
         verbose_name = 'Комментарий'
         verbose_name_plural = 'Комментарии'
 
+
 class AnswerLike(models.Model):
     answer = models.ForeignKey(Answer, on_delete=models.CASCADE, verbose_name='Ответ', related_name='likes')
     author = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='Автор')
@@ -85,6 +98,7 @@ class AnswerLike(models.Model):
         verbose_name = 'Лайк на ответ'
         verbose_name_plural = 'Лайки на ответы'
 
+
 class CommentLike(models.Model):
     comment = models.ForeignKey(Comment, on_delete=models.CASCADE, verbose_name='Комментарий', related_name='likes')
     author = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='Автор')
@@ -93,3 +107,12 @@ class CommentLike(models.Model):
     class Meta:
         verbose_name = 'Лайк на комментарий'
         verbose_name_plural = 'Лайки на комментарии'
+
+
+@receiver(models.signals.post_save, sender=Answer)
+def execute_after_save(sender: Answer, instance, created, *args, **kwargs):
+    if created:
+        send_mail('Новый ответ на ваш вопрос',
+                  f"Пользователь {instance.author.username} дал ответ на ваш вопрос: \"{instance.question.title}\"\n\n{instance.answer_text}",
+                  'noreply@site.ru',
+                  [instance.question.author.email])
